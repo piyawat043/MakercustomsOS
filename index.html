@@ -689,16 +689,11 @@ function handleStart(event) {
             const cmd = menuItems[currentIndex].getAttribute('data-cmd');
             sendAHK(cmd);
 
-            // ถ้าเลือกเมนู 3DPROBE ให้เปิดหน้าต่าง piyawat_flow.html แบบ Popup เต็มจอ
+            // หน่วงเวลาเพื่อให้เสียงเอฟเฟกต์ทำงานก่อน แล้วโหลดหน้า piyawat_flow.html ทับในหน้าต่างเดิม
             if (cmd === "CMD_3DPROBE") {
-                const w = window.screen.availWidth;
-                const h = window.screen.availHeight;
-                const popup = window.open(
-                    'piyawat_flow.html',
-                    'PiyawatFlowPopup',
-                    `width=${w},height=${h},left=0,top=0,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`
-                );
-                if (popup) popup.focus();
+                setTimeout(() => {
+                    window.location.href = 'piyawat_flow.html';
+                }, 800); // 800 มิลลิวินาที (0.8 วินาที) สามารถปรับเพิ่ม-ลดให้พอดีกับความยาวเสียงได้
             }
         }
 
