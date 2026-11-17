@@ -16,9 +16,13 @@
             --bg-pure-black: #000000; 
         }
 
-        body {
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
             margin: 0; padding: 0;
-            width: 1280px; height: 900px;
+            width: 100vw; height: 100vh;
             background: var(--bg-pure-black);
             color: white; font-family: 'Prompt', sans-serif; 
             overflow: hidden; user-select: none;
@@ -51,15 +55,15 @@
             }
         }
 
-        @keyframes pulseAlert {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(255, 215, 0, 0.2); }
-            50% { transform: scale(1.02); box-shadow: 0 0 25px rgba(255, 215, 0, 0.5); }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
         }
 
         /* Connection Layer */
         #connection-layer { 
-            position: absolute; top: 0; left: 0; 
-            width: 100%; height: 100%; 
+            position: fixed; top: 0; left: 0; 
+            width: 100vw; height: 100vh; 
             pointer-events: none; z-index: 1; 
         }
         .conn-line {
@@ -71,9 +75,9 @@
         }
         @keyframes drawLine { to { stroke-dashoffset: 0; } }
 
-        /* Flow Container */
+        /* Flow Container (เต็มหน้าจอ 100vw x 100vh) */
         .flow-container { 
-            position: relative; width: 100%; height: 100%; 
+            position: relative; width: 100vw; height: 100vh; 
             background: var(--bg-pure-black); z-index: 2;
             display: flex; flex-direction: column;
             box-sizing: border-box;
@@ -101,22 +105,30 @@
             height: 70px; border-bottom: 1px solid #1a1a1a; 
             display: flex; align-items: center; justify-content: center;
             background: var(--bg-pure-black);
+            flex-shrink: 0;
         }
 
         .grid-container { 
             display: grid; grid-template-columns: 1fr 1fr 1fr 1.5fr; 
-            height: calc(100% - 70px); width: 100%; 
+            height: calc(100vh - 70px); width: 100%; 
         }
 
         .col { 
-            padding: 20px; display: flex; flex-direction: column; 
-            gap: 28px; position: relative; border-right: 1px solid rgba(255,255,255,0.06);
+            padding: 2vh 1.5vw; display: flex; flex-direction: column; 
+            gap: 2.5vh; position: relative; border-right: 1px solid rgba(255,255,255,0.06);
+            height: 100%;
+        }
+
+        #col2-content, #col3-content {
+            display: flex;
+            flex-direction: column;
+            gap: 2.5vh;
         }
         
         .col-header { 
             color: var(--neon-blue); font-family: 'Rajdhani'; 
-            font-size: 45px; font-weight: 700; text-align: center; 
-            opacity: 0.8; margin-bottom: 5px;
+            font-size: clamp(32px, 4.5vh, 48px); font-weight: 700; text-align: center; 
+            opacity: 0.8; margin-bottom: 0.5vh;
             transition: color 0.2s ease;
         }
 
@@ -126,16 +138,17 @@
             border-radius: 15px; padding: 10px; cursor: pointer; 
             transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
             display: flex; align-items: center; justify-content: center; 
-            height: 135px; position: relative; z-index: 10; 
+            height: 15vh; min-height: 100px; max-height: 165px;
+            position: relative; z-index: 10; 
             animation: buttonBreatheSoft 3.8s infinite ease-in-out;
         }
-        .select-btn img { height: 95px; width: 100%; object-fit: contain; transition: 0.3s; }
+        .select-btn img { height: 75%; width: 100%; object-fit: contain; transition: 0.3s; }
         
         .select-btn:hover { 
             animation: none;
             background: #080d12; 
             border-color: var(--neon-blue); 
-            transform: scale(1.08); z-index: 100; 
+            transform: scale(1.06); z-index: 100; 
             box-shadow: 0 0 25px rgba(0,243,255,0.5);
         }
         .select-btn.active { 
@@ -147,21 +160,21 @@
         }
 
         /* Execution Panel */
-        .exec-panel { align-items: center; background: #020406; }
+        .exec-panel { align-items: center; background: #020406; border-right: none; }
         #video-container { 
-            width: 100%; height: 320px; display: none; 
+            width: 100%; height: 38vh; max-height: 460px; display: none; 
             background: #000000; border-radius: 15px; overflow: hidden; 
-            margin-top: 10px;
+            margin-top: 1vh;
         }
         #video-container.show { display: block; border: 1px solid var(--neon-blue); }
         video { width: 100%; height: 100%; object-fit: cover; }
 
         /* ปุ่ม START */
         .btn-start { 
-            width: 100%; padding: 22px; font-size: 28px; font-weight: bold; 
+            width: 100%; padding: 2.2vh 15px; font-size: clamp(22px, 2.8vh, 30px); font-weight: bold; 
             font-family: 'Rajdhani', 'Prompt', sans-serif; background: transparent; border: 2px solid #222; 
             color: #555; border-radius: 12px; cursor: not-allowed; 
-            transition: 0.3s; margin-top: auto; margin-bottom: 20px;
+            transition: 0.3s; margin-top: auto; margin-bottom: 2vh;
             letter-spacing: 1px;
         }
 
@@ -205,37 +218,47 @@
             border-radius: 20px; padding: 20px;
             box-shadow: 0 0 50px rgba(0, 243, 255, 0.4);
         }
-        #global-preview-img { width: 300px; height: auto; }
+        #global-preview-img { width: 20vw; max-width: 340px; min-width: 220px; height: auto; }
 
-        /* Modal แจ้งเตือนเมื่อไม่ได้กด CTRL */
+        /* Modal แจ้งเตือนเมื่อไม่ได้กด CTRL (แสดงรูปภาพ ctrlsos.png) */
         .ctrl-modal-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.9);
+            position: fixed; inset: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
             z-index: 20000; display: none;
             align-items: center; justify-content: center;
         }
         .ctrl-modal-overlay.show { display: flex; }
         .ctrl-modal-box {
-            background: #000000; border: 3px solid var(--neon-gold);
-            border-radius: 20px; padding: 40px; text-align: center;
-            max-width: 520px; width: 90%;
-            box-shadow: 0 0 50px rgba(255, 215, 0, 0.4);
-            animation: pulseAlert 2s infinite ease-in-out;
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            padding: 15px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
-        .ctrl-modal-box i { font-size: 70px; color: var(--neon-gold); margin-bottom: 20px; }
-        .ctrl-modal-box h2 { 
-            font-size: 32px; margin: 0 0 15px 0; color: #fff; 
-            font-family: 'Prompt', sans-serif; 
+        #ctrl-modal-img {
+            display: block;
+            max-width: 80vw;
+            max-height: 70vh;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            margin: 0 auto 20px auto;
+            border-radius: 12px;
+            filter: drop-shadow(0 0 25px rgba(0, 243, 255, 0.45));
+            cursor: pointer;
+            animation: fadeIn 0.25s ease-out forwards;
         }
-        .ctrl-modal-box p { font-size: 22px; color: #ccc; margin: 0 0 30px 0; line-height: 1.5; }
-        .ctrl-modal-box p span { color: var(--neon-gold); font-weight: bold; }
         .ctrl-modal-btn {
-            background: var(--neon-gold); color: #000000; border: none;
-            padding: 14px 40px; font-size: 22px; font-weight: bold;
-            border-radius: 10px; cursor: pointer; font-family: 'Prompt', sans-serif;
+            background: #00f3ff; color: #000000; border: none;
+            padding: 10px 35px; font-size: 18px; font-weight: 700;
+            border-radius: 8px; cursor: pointer; font-family: 'Prompt', sans-serif;
             transition: 0.3s;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
         }
-        .ctrl-modal-btn:hover { background: #ffffff; box-shadow: 0 0 20px #ffffff; }
+        .ctrl-modal-btn:hover { background: #ffffff; box-shadow: 0 0 25px #ffffff; transform: scale(1.05); }
 
         /* Video Tutorial Overlay */
         #idle-video-overlay {
@@ -318,13 +341,11 @@
     </div>
 </div>
 
-<!-- Modal แจ้งเตือนเมื่อลืมกด CTRL -->
+<!-- Modal แจ้งเตือนเมื่อลืมกด CTRL (แสดงรูป ctrlsos.png) -->
 <div id="ctrl-modal" class="ctrl-modal-overlay" onclick="closeCtrlModal()">
     <div class="ctrl-modal-box" onclick="event.stopPropagation()">
-        <i class="fa-solid fa-triangle-exclamation"></i>
-        <h2>ยืนยันความปลอดภัย</h2>
-        <p>กรุณากดปุ่ม <span>[ CTRL ]</span> บนคีย์บอร์ดค้างไว้<br>พร้อมกับคลิกที่ปุ่ม START</p>
-        <button class="ctrl-modal-btn" onclick="closeCtrlModal()">รับทราบและปิดหน้านี้</button>
+        <img id="ctrl-modal-img" src="ctrlsos.png" alt="กรุณากดปุ่ม Ctrl ค้างไว้" onclick="closeCtrlModal()">
+        <button class="ctrl-modal-btn" onclick="closeCtrlModal()">รับทราบ</button>
     </div>
 </div>
 
@@ -560,8 +581,8 @@
     function execute(event) { 
         if (!state.device) return; 
         
-        // ถ้าไม่ได้กด CTRL ให้แจ้งเตือน
-        if (!event.ctrlKey) {
+        // ถ้าไม่ได้กด CTRL ให้แจ้งเตือนด้วยรูป ctrlsos.png
+        if (!event.ctrlKey && !isCtrlPressed) {
             showCtrlModal();
             return; 
         }
