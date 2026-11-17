@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart CNC Interface</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;700&family=Rajdhani:wght@700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-green: #00ff66;
+            --neon-green-bright: #39ff14;
+            --neon-gold: #ffd700;
+            --bg-color: #03080e;
+            --border-ui: rgba(19, 39, 56, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            background-color: var(--bg-color);
+            color: #ffffff;
+            font-family: 'Prompt', sans-serif;
+            overflow: hidden;
+            display: flex;
+            position: relative;
+        }
+
+        /* --- กรอบแสงเตือนรอบขอบจอเมื่อกดปุ่ม Ctrl ค้างไว้ --- */
+        body.ctrl-down::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            border: 3.5px solid var(--neon-green-bright);
+            box-shadow: inset 0 0 50px rgba(0, 255, 102, 0.35), 0 0 40px rgba(0, 255, 102, 0.5);
+            pointer-events: none;
+            z-index: 999;
+            animation: screenAlertPulse 0.8s ease-in-out infinite alternate;
+        }
+
+        @keyframes screenAlertPulse {
+            0% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        /* --- Grid & Glow Background --- */
+        .grid-bg {
+            position: fixed;
+            inset: 0;
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(0, 243, 255, 0.05) 0%, transparent 70%),
+                linear-gradient(rgba(0, 243, 255, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 243, 255, 0.035) 1px, transparent 1px);
+            background-size: 100% 100%, 48px 48px, 48px 48px;
+            z-index: 0;
+            pointer-events: none;
+        }
+		
+        /* --- Intro Video --- */
+        .intro-overlay {
+            position: fixed;
+            inset: 0;
+            background: #000000;
+            z-index: 99999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+        .intro-overlay.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+        .intro-overlay video { width: 100%; height: 100%; object-fit: cover; }
+
+        /* --- เส้นไฟวิ่งด้านล่าง --- */
+        .scan-line-horizontal {
+            position: fixed;
+            bottom: 0; left: 0; width: 30vw; height: 6px;
+            background: linear-gradient(to right, transparent, rgba(0, 243, 255, 0.8), rgba(0, 243, 255, 1), transparent);
+            box-shadow: 0 -5px 25px rgba(0, 243, 255, 0.8);
+            z-index: 90; pointer-events: none;
+            animation: scanBottom 4s ease-in-out infinite;
+        }
+        @keyframes scanBottom {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100vw); }
+        }
+
+        /* --- แถบ Header กลางจอ และปุ่มควบคุม --- */
+        .top-header-bar {
+            position: fixed;
+            top: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            z-index: 250;
+            width: 80%;
+            background: rgba(4, 9, 16, 0.4);
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 243, 255, 0.1);
+            backdrop-filter: blur(5px);
+        }
+
+        .main-title-text {
+            font-family: 'Rajdhani', 'Prompt', sans-serif;
+            font-size: 60px;
+            font-weight: 700;
+            color: #ffffff;
+            text-shadow: 0 0 15px rgba(0, 243, 255, 0.8), 0 0 30px rgba(0, 243, 255, 0.4);
+            letter-spacing: 3px;
+            padding: 4px 15px;
+            border-radius: 8px;
+            outline: none;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .action-tool-btn {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            background: rgba(4, 15, 25, 0.85);
+            border: 1.5px solid rgba(0, 243, 255, 0.35);
+            color: var(--neon-blue);
+            font-size: 19px;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.15);
+        }
+        .action-tool-btn:hover {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.5);
+            transform: scale(1.08);
+        }
+
+        .action-tool-btn.active-editing {
+            border-color: var(--neon-gold); color: var(--neon-gold);
+            background: rgba(255, 215, 0, 0.15); box-shadow: 0 0 25px rgba(255, 215, 0, 0.7);
+            animation: editPulseBtn 0.9s ease-in-out infinite alternate;
+        }
+        @keyframes editPulseBtn {
+            0% { transform: scale(1.02); }
+            100% { transform: scale(1.12); }
+        }
+
+        .action-tool-btn.active-music {
+            border-color: var(--neon-green); color: var(--neon-green);
+            background: rgba(0, 255, 102, 0.15);
+            box-shadow: 0 0 20px rgba(0, 255, 102, 0.5);
+        }
+
+        /* --- ข้อความมุมขวาล่าง --- */
+        .bottom-right-footer {
+            position: fixed;
+            bottom: 20px;
+            right: 30px;
+            z-index: 250;
+            text-align: right;
+        }
+        .footer-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: #7d93a8;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        /* --- ซ้าย: เมนูแนวตั้ง --- */
+        .panel-left {
+            width: 28%; height: 100%; border-right: 1.5px solid var(--border-ui);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            padding: 15px 25px; gap: 12px;
+            background: rgba(4, 9, 16, 0.6); backdrop-filter: blur(8px); z-index: 10;
+        }
+
+        .brand-container {
+            width: 100%; padding-bottom: 8px; margin-bottom: 2px;
+            border-bottom: 1px solid rgba(0, 243, 255, 0.15); text-align: left;
+        }
+        .brand-text {
+            font-family: 'Rajdhani', sans-serif; font-size: 22px; font-weight: 700;
+            letter-spacing: 2px; color: var(--neon-blue);
+            text-shadow: 0 0 12px rgba(0, 243, 255, 0.6);
+            display: inline-block; padding: 2px 6px; border-radius: 6px; outline: none; transition: 0.3s;
+        }
+
+        .menu-btn {
+            width: 100%; padding: 14px 16px; border-radius: 14px;
+            background: rgba(10, 18, 30, 0.6); border: 1.5px solid rgba(255, 255, 255, 0.08);
+            cursor: pointer; display: flex; align-items: center; gap: 14px;
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); opacity: 0.22; filter: blur(1px); transform: scale(0.92);
+        }
+        .menu-btn.neighbor { opacity: 0.38; filter: blur(0.5px); border-color: rgba(0, 243, 255, 0.2); transform: scale(0.96); }
+        .menu-btn.active {
+            opacity: 1; filter: blur(0); transform: scale(1.04); background: rgba(0, 243, 255, 0.08);
+            border-color: var(--neon-blue); box-shadow: 0 0 25px rgba(0, 243, 255, 0.4), inset 0 0 15px rgba(0, 243, 255, 0.15);
+        }
+        .menu-btn.primary-btn.active {
+            border-color: var(--neon-gold); background: rgba(255, 215, 0, 0.08);
+            box-shadow: 0 0 25px rgba(255, 215, 0, 0.35), inset 0 0 15px rgba(255, 215, 0, 0.15);
+        }
+        .menu-btn.primary-btn.active i { color: var(--neon-gold); text-shadow: 0 0 10px var(--neon-gold); }
+        .menu-btn i { font-size: 26px; color: #556c80; transition: 0.3s; }
+        .menu-btn.active i { color: var(--neon-blue); text-shadow: 0 0 10px var(--neon-blue); }
+        .menu-btn .title {
+            font-size: 15px; font-weight: 700; color: #7d93a8; letter-spacing: 0.5px;
+            transition: 0.3s; white-space: nowrap; outline: none; padding: 2px 6px; border-radius: 6px;
+        }
+        .menu-btn.active .title { color: #ffffff; text-shadow: 0 0 8px rgba(0, 243, 255, 0.6); }
+
+        /* --- สไตล์เมื่อเปิดโหมดแก้ไข (Inline Edit Mode) --- */
+        body.is-editing .editable-target {
+            border: 1.5px dashed var(--neon-gold) !important;
+            background: rgba(255, 215, 0, 0.12) !important;
+            cursor: text !important;
+            user-select: text !important;
+            color: #ffffff !important;
+        }
+        body.is-editing .editable-target:focus {
+            background: rgba(255, 215, 0, 0.25) !important;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.7) !important;
+        }
+
+        /* --- กลาง: แสดงภาพพรีวิวพร้อมแสงหายใจ --- */
+        .panel-center {
+            width: 47%; height: 100%; display: flex; justify-content: center; align-items: center;
+            padding: 30px; border-right: 1.5px solid var(--border-ui); background: transparent; z-index: 10;
+        }
+        .preview-box {
+            width: 100%; height: 100%; max-width: 650px; max-height: 650px;
+            border: 2.5px solid rgba(0, 243, 255, 0.3); border-radius: 20px;
+            background: #020408; display: flex; justify-content: center; align-items: center;
+            overflow: hidden; position: relative; animation: breathingGlow 3.5s ease-in-out infinite;
+        }
+        @keyframes breathingGlow {
+            0%, 100% { border-color: rgba(0, 243, 255, 0.2); box-shadow: 0 0 25px rgba(0, 243, 255, 0.15), inset 0 0 15px rgba(0, 243, 255, 0.05); }
+            50% { border-color: rgba(0, 243, 255, 0.85); box-shadow: 0 0 55px rgba(0, 243, 255, 0.6), inset 0 0 30px rgba(0, 243, 255, 0.25); }
+        }
+        .preview-box img, .preview-box video {
+            width: 100%; height: 100%; object-fit: contain; display: none; position: absolute; inset: 0;
+        }
+        .preview-box .active-media { display: block; animation: fadeIn 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+        /* --- ขวา: ปุ่ม START PROCESS --- */
+        .panel-right {
+            width: 25%; height: 100%; display: flex; justify-content: center; align-items: center;
+            background: rgba(4, 9, 16, 0.6); backdrop-filter: blur(8px); padding: 30px; z-index: 10;
+        }
+        .btn-start {
+            width: 90%; max-width: 280px; padding: 24px 10px; border-radius: 14px;
+            background: rgba(0, 243, 255, 0.03); border: 2.5px solid var(--neon-blue); color: var(--neon-blue);
+            font-family: 'Rajdhani', sans-serif; font-size: 26px; font-weight: 700; letter-spacing: 2px;
+            cursor: pointer; text-align: center;
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.25), inset 0 0 10px rgba(0, 243, 255, 0.1); transition: all 0.25s ease;
+        }
+        .btn-start:hover {
+            background: rgba(0, 243, 255, 0.15); box-shadow: 0 0 35px rgba(0, 243, 255, 0.5); transform: scale(1.03);
+        }
+
+        .btn-start-text {
+            outline: none;
+            padding: 2px 8px;
+            border-radius: 6px;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        body.ctrl-down .btn-start {
+            border-color: #ffffff; color: #ffffff; background: rgba(0, 255, 102, 0.3);
+            text-shadow: 0 0 10px #ffffff, 0 0 20px var(--neon-green-bright), 0 0 35px var(--neon-green);
+            animation: ctrlStartPulse 0.75s ease-in-out infinite alternate;
+        }
+        @keyframes ctrlStartPulse {
+            0% { border-color: var(--neon-green); box-shadow: 0 0 20px var(--neon-green), 0 0 40px rgba(0, 255, 102, 0.7), inset 0 0 15px rgba(0, 255, 102, 0.4); transform: scale(1.02); }
+            100% { border-color: #ffffff; box-shadow: 0 0 35px #ffffff, 0 0 70px var(--neon-green-bright), 0 0 120px rgba(0, 255, 102, 0.95), inset 0 0 30px rgba(0, 255, 102, 0.7); transform: scale(1.08); }
+        }
+
+        /* --- สไตล์ร่วมของปุ่มลอย --- */
+        .floating-cam-btn {
+            position: fixed; bottom: 40px; width: 130px; height: 130px; border-radius: 50%;
+            background: rgba(4, 15, 25, 0.85); border: 3px solid rgba(0, 243, 255, 0.4);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            cursor: pointer; z-index: 200; box-shadow: 0 0 20px rgba(0, 243, 255, 0.25);
+            transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.35s ease, border-color 0.35s ease;
+            backdrop-filter: blur(4px);
+        }
+        .floating-cam-btn img {
+            width: 90px; height: 90px; object-fit: contain; pointer-events: none; transition: filter 0.35s ease;
+        }
+        .floating-label {
+            position: absolute; bottom: -28px; width: 145px; text-align: center;
+            font-size: 13px; font-weight: 700; color: #a4c4dc; letter-spacing: 0.5px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 2px 6px;
+            border-radius: 6px; outline: none; pointer-events: auto; text-shadow: 0 0 8px rgba(0, 0, 0, 0.9);
+        }
+        .floating-cam-btn:hover {
+            transform: scale(1.22); border-color: var(--neon-blue);
+            box-shadow: 0 0 35px var(--neon-blue), 0 0 70px rgba(0, 243, 255, 0.5), inset 0 0 20px rgba(0, 243, 255, 0.4);
+        }
+        .floating-cam-btn:hover img { filter: drop-shadow(0 0 10px var(--neon-blue)); }
+
+        body.ctrl-down .floating-cam-btn {
+            background: rgba(2, 25, 15, 0.92); animation: ctrlFloatingPulse 0.75s ease-in-out infinite alternate;
+        }
+        body.ctrl-down .floating-cam-btn img {
+            filter: drop-shadow(0 0 12px var(--neon-green-bright)) drop-shadow(0 0 25px var(--neon-green));
+        }
+        @keyframes ctrlFloatingPulse {
+            0% { border-color: var(--neon-green); box-shadow: 0 0 20px var(--neon-green), 0 0 45px rgba(0, 255, 102, 0.6), inset 0 0 20px rgba(0, 255, 102, 0.4); transform: scale(1.04); }
+            100% { border-color: #ffffff; box-shadow: 0 0 35px #ffffff, 0 0 75px var(--neon-green-bright), 0 0 130px rgba(0, 255, 102, 0.9), inset 0 0 35px rgba(0, 255, 102, 0.7); transform: scale(1.12); }
+        }
+        #btnMillWi { left: 30px; }
+        #btnCameraV3 { left: 210px; }
+        #btnParkCNC { left: 390px; }
+
+        /* Modal แจ้งเตือน */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85);
+            display: none; justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-content {
+            background: #070e17; border: 2px solid #00f3ff; border-radius: 15px; padding: 35px 45px;
+            text-align: center; box-shadow: 0 0 30px rgba(0, 243, 255, 0.4);
+        }
+        .modal-content i { font-size: 45px; color: #00f3ff; margin-bottom: 15px; }
+        .modal-content p { font-size: 20px; color: #ffffff; margin-bottom: 25px; line-height: 1.5; }
+        .modal-btn {
+            background: #00f3ff; color: #000; border: none; padding: 10px 30px;
+            border-radius: 8px; font-weight: 700; cursor: pointer;
+        }
+
+        /* === [เพิ่มใหม่] สไตล์สำหรับแสดงรูปภาพแจ้งเตือน Ctrl (ctrlsos.png) === */
+        .modal-content.image-mode {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            padding: 15px;
+        }
+        #modalImg {
+            display: none;
+            max-width: 80vw;
+            max-height: 70vh;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            margin: 0 auto 20px auto;
+            border-radius: 12px;
+            filter: drop-shadow(0 0 25px rgba(0, 243, 255, 0.45));
+            cursor: pointer;
+            animation: fadeIn 0.25s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="grid-bg"></div>
+
+    <!-- ชั้นแสดงผลวิดีโอ Intro -->
+    <div id="introOverlay" class="intro-overlay">
+        <video id="introVideo" src="thepowerofnow.mp4" autoplay muted playsinline></video>
+    </div>
+	
+    <div class="scan-line-horizontal"></div>
+
+    <!-- แถบ Header และปุ่มควบคุมตรงกลางด้านบน -->
+    <div class="top-header-bar">
+        <span id="mainHeaderTitle" class="main-title-text editable-target" title="คลิกเพื่อแก้ไขหัวข้อหลัก">SMART CNC INTERFACE</span>
+        <div class="header-actions">
+            <button id="btnToggleMusic" class="action-tool-btn" title="คลิกเพื่อเปิด/ปิด Music Auto Start" onclick="toggleMusicAutoStart()">
+                <i class="fa-solid fa-music"></i>
+            </button>
+            <button id="btnEditMode" class="action-tool-btn" title="คลิกเพื่อเข้าสู่โหมดแก้ไขข้อความ" onclick="toggleEditMode()">
+                <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button id="btnSaveConfig" class="action-tool-btn" title="บันทึกการตั้งค่าลง localStorage" onclick="saveConfiguration()">
+                <i class="fa-solid fa-floppy-disk"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- ข้อความมุมขวาล่าง -->
+    <div class="bottom-right-footer">
+        <span id="footerText" class="footer-text editable-target" title="คลิกเพื่อแก้ไขชื่อสถานประกอบการหรือคำคม">INNOVATIVE ENGINEERING CENTER</span>
+    </div>
+
+    <!-- ฝั่งซ้าย: แบรนด์และเมนูเลือกโหมด -->
+    <div class="panel-left">
+        <div class="brand-container">
+            <span id="brandName" class="brand-text editable-target" title="คลิกเพื่อแก้ไขชื่อแบรนด์">SMART CNC VISION</span>
+        </div>
+
+        <div class="menu-btn primary-btn active" data-cmd="CMD_3DPROBE" onclick="selectMenu(0)">
+            <i class="fa-solid fa-satellite-dish"></i>
+            <span class="title editable-target">3DPROBE XYZsensor</span>
+        </div>
+        <div class="menu-btn neighbor" data-cmd="CMD_OFFSET" onclick="selectMenu(1)">
+            <i class="fa-solid fa-crosshairs"></i>
+            <span class="title editable-target">OFFSET</span>
+        </div>
+        <div class="menu-btn" data-cmd="CMD_TOOLH" onclick="selectMenu(2)">
+            <i class="fa-solid fa-ruler-vertical"></i>
+            <span class="title editable-target">วัดเครื่องมือ TOOL SETTER</span>
+        </div>
+        <div class="menu-btn" data-cmd="CMD_CAMCUT" onclick="selectMenu(3)">
+            <i class="fa-solid fa-camera"></i>
+            <span class="title editable-target">ตัดด้วยกล้อง</span>
+        </div>
+        <div class="menu-btn" data-cmd="CMD_SCANAUTO" onclick="selectMenu(4)">
+            <i class="fa-solid fa-wave-square"></i>
+            <span class="title editable-target">สแกนผิว AUTO</span>
+        </div>
+        <div class="menu-btn" data-cmd="CMD_SETUP_SEMIAUTO" onclick="selectMenu(5)">
+            <i class="fa-solid fa-sliders"></i>
+            <span class="title editable-target">ระบบสอบเทียบกึ่งอัตโนมัติ</span>
+        </div>
+    </div>
+
+    <!-- ตรงกลาง: พรีวิว -->
+    <div class="panel-center">
+        <div class="preview-box">
+            <img id="media-img-0" src="icon3dprobe.png" class="active-media">
+            <video id="media-vdo-0" src="introprobe.mp4" loop muted playsinline></video>
+            <img id="media-1" src="offseticon.png">
+            <img id="media-2" src="icontoolzero.png">
+            <img id="media-3" src="camcut.png">
+            <img id="media-4" src="iconscan.png">
+            <img id="media-5" src="iconsetup.png">
+        </div>
+    </div>
+
+    <!-- ฝั่งขวา: ปุ่ม START PROCESS -->
+    <div class="panel-right">
+        <button id="btnStart" class="btn-start" onclick="handleStart(event)">
+            <span id="lblBtnStart" class="btn-start-text editable-target" title="คลิกเพื่อแก้ไขชื่อปุ่ม">START PROCESS</span>
+        </button>
+    </div>
+
+    <!-- ปุ่มลอย -->
+    <div id="btnMillWi" class="floating-cam-btn" title="กด Ctrl + Click เพื่อเปิด Milling Wizard" onclick="handleMillWiClick(event)">
+        <img src="millwi.png" alt="Milling Wizard">
+        <span id="lblMillWi" class="floating-label editable-target" onclick="event.stopPropagation()">Milling Wizard</span>
+    </div>
+
+    <div id="btnCameraV3" class="floating-cam-btn" title="กด Ctrl + Click เพื่อเปิดกล้อง" onclick="handleCameraClick(event)">
+        <img src="camerav3.png" alt="Camera Master">
+        <span id="lblCamera" class="floating-label editable-target" onclick="event.stopPropagation()">Camera Master</span>
+    </div>
+
+    <div id="btnParkCNC" class="floating-cam-btn" title="กด Ctrl + Click เพื่อไปยังตำแหน่ง Park" onclick="handleParkClick(event)">
+        <img src="parkcnc.png" alt="Go to Park">
+        <span id="lblPark" class="floating-label editable-target" onclick="event.stopPropagation()">Go to Park</span>
+    </div>
+
+    <!-- Modal แจ้งเตือน -->
+    <div id="ctrlModal" class="modal-overlay" onclick="closeModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <!-- === [เพิ่มใหม่] รูปภาพสำหรับแจ้งเตือนให้กดปุ่ม Ctrl === -->
+            <img id="modalImg" src="ctrlsos.png" alt="กรุณากดปุ่ม Ctrl ค้างไว้" onclick="closeModal()">
+            
+            <i id="modalIcon" class="fa-solid fa-triangle-exclamation"></i>
+            <p id="modalMsg">ข้อความแจ้งเตือน</p>
+            <button class="modal-btn" onclick="closeModal()">รับทราบ</button>
+        </div>
+    </div>
+
+    <!-- ออดิโอระบบ -->
+    <audio id="snd-hover" src="uihover.mp3"></audio>
+    <audio id="snd-start" src="ui_startv2.mp3"></audio>
+
+    <script>
+        const menuItems = document.querySelectorAll('.menu-btn');
+        const sndHover = document.getElementById('snd-hover');
+        const sndStart = document.getElementById('snd-start');
+
+        let currentIndex = -1;
+        let isCtrlPressed = false;
+        let isEditMode = false;
+        let autoStartMusic = false;
+        let videoSwitchTimer = null;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            const introOverlay = document.getElementById('introOverlay');
+            const introVideo = document.getElementById('introVideo');
+
+            introVideo.play().catch(() => {});
+
+            setTimeout(() => {
+                introOverlay.classList.add('hide');
+                introVideo.pause();
+                selectMenu(0);
+            }, 2000);
+
+            // โหลดการตั้งค่าตรงจาก localStorage ทันทีที่เปิดหน้าจอ
+            loadConfig();
+        });
+
+        /* --- ฟังก์ชันสลับสถานะเปิด/ปิด เพลงอัตโนมัติ --- */
+        function toggleMusicAutoStart() {
+            if (isEditMode) return;
+            autoStartMusic = !autoStartMusic;
+            updateMusicButtonUI();
+            playSound(sndHover);
+        }
+
+        function updateMusicButtonUI() {
+            const btnMusic = document.getElementById('btnToggleMusic');
+            if (autoStartMusic) {
+                btnMusic.classList.add('active-music');
+                btnMusic.title = "Music Auto Start: ON (เปิดใช้งานอยู่)";
+            } else {
+                btnMusic.classList.remove('active-music');
+                btnMusic.title = "Music Auto Start: OFF (ปิดการใช้งาน)";
+            }
+        }
+
+        /* --- ฟังก์ชันสลับโหมดแก้ไขชื่อ (Inline Edit) --- */
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            const btnEdit = document.getElementById('btnEditMode');
+            const editableElements = document.querySelectorAll('.editable-target');
+
+            if (isEditMode) {
+                document.body.classList.add('is-editing');
+                btnEdit.classList.add('active-editing');
+                btnEdit.title = "กำลังอยู่ในโหมดแก้ไข (คลิกที่ตัวหนังสือเพื่อพิมพ์)";
+                editableElements.forEach(el => el.setAttribute('contenteditable', 'true'));
+                playSound(sndHover);
+            } else {
+                document.body.classList.remove('is-editing');
+                btnEdit.classList.remove('active-editing');
+                btnEdit.title = "คลิกเพื่อเข้าสู่โหมดแก้ไขข้อความ";
+                editableElements.forEach(el => el.setAttribute('contenteditable', 'false'));
+                playSound(sndHover);
+            }
+        }
+
+        /* --- ฟังก์ชันบันทึกการตั้งค่าลง localStorage แบบตรง 100% --- */
+        function saveConfiguration() {
+            playSound(sndStart);
+            if (isEditMode) toggleEditMode();
+
+            const configObj = {
+                mainHeader: document.getElementById('mainHeaderTitle').innerText.trim(),
+                footerText: document.getElementById('footerText').innerText.trim(),
+                brandName: document.getElementById('brandName').innerText.trim(),
+                btnStartText: document.getElementById('lblBtnStart') ? document.getElementById('lblBtnStart').innerText.trim() : "START PROCESS",
+                autoStartMusic: autoStartMusic,
+                menuTitles: [],
+                floatingTitles: {
+                    mill: document.getElementById('lblMillWi') ? document.getElementById('lblMillWi').innerText.trim() : "Milling Wizard",
+                    cam: document.getElementById('lblCamera') ? document.getElementById('lblCamera').innerText.trim() : "Camera Master",
+                    park: document.getElementById('lblPark') ? document.getElementById('lblPark').innerText.trim() : "Go to Park"
+                }
+            };
+
+            document.querySelectorAll('.panel-left .menu-btn .title').forEach(el => {
+                configObj.menuTitles.push(el.innerText.trim());
+            });
+
+            // บันทึกลงในหน่วยความจำ localStorage ของเบราว์เซอร์ทันที
+            localStorage.setItem('smart_cnc_config', JSON.stringify(configObj));
+
+            showModal("บันทึกการตั้งค่าเรียบร้อยแล้ว!<br><span style='font-size:16px; color:#00ff66;'>บันทึกสำเร็จลงในระบบความจำเรียบร้อยแล้ว</span>", "fa-solid fa-circle-check");
+        }
+
+        /* --- ฟังก์ชันดึงค่าจาก localStorage กลับมาแสดงผล --- */
+        function loadConfig() {
+            try {
+                const stored = localStorage.getItem('smart_cnc_config');
+                if (!stored) return;
+
+                const configData = JSON.parse(stored);
+                if (!configData) return;
+
+                if (configData.mainHeader) document.getElementById('mainHeaderTitle').innerText = configData.mainHeader;
+                if (configData.footerText) document.getElementById('footerText').innerText = configData.footerText;
+                if (configData.brandName) document.getElementById('brandName').innerText = configData.brandName;
+
+                if (configData.btnStartText && document.getElementById('lblBtnStart')) {
+                    document.getElementById('lblBtnStart').innerText = configData.btnStartText;
+                }
+
+                if (typeof configData.autoStartMusic !== 'undefined') {
+                    autoStartMusic = configData.autoStartMusic;
+                    updateMusicButtonUI();
+                    if (autoStartMusic) {
+                        sendAHK("CMD_AUTO_START_MUSIC");
+                    }
+                }
+
+                if (Array.isArray(configData.menuTitles)) {
+                    const menuTitleEls = document.querySelectorAll('.panel-left .menu-btn .title');
+                    configData.menuTitles.forEach((title, idx) => {
+                        if (menuTitleEls[idx]) menuTitleEls[idx].innerText = title;
+                    });
+                }
+
+                if (configData.floatingTitles) {
+                    if (configData.floatingTitles.mill && document.getElementById('lblMillWi')) document.getElementById('lblMillWi').innerText = configData.floatingTitles.mill;
+                    if (configData.floatingTitles.cam && document.getElementById('lblCamera')) document.getElementById('lblCamera').innerText = configData.floatingTitles.cam;
+                    if (configData.floatingTitles.park && document.getElementById('lblPark')) document.getElementById('lblPark').innerText = configData.floatingTitles.park;
+                }
+            } catch (err) {
+                console.error("Error loading config from localStorage:", err);
+            }
+        }
+
+        function playSound(audio) {
+            if (audio) { audio.currentTime = 0; audio.play().catch(() => {}); }
+        }
+
+        function clearAllMedia() {
+            if (videoSwitchTimer) { clearTimeout(videoSwitchTimer); videoSwitchTimer = null; }
+            document.querySelectorAll('.preview-box img, .preview-box video').forEach(el => {
+                el.classList.remove('active-media');
+                if (el.tagName === 'VIDEO') { el.pause(); el.currentTime = 0; }
+            });
+        }
+
+        function selectMenu(index) {
+            if (isEditMode) return; 
+            if (index < 0 || index >= menuItems.length) return;
+            if (index === currentIndex) return;
+            currentIndex = index;
+            playSound(sndHover);
+
+            menuItems.forEach((btn, i) => {
+                btn.classList.remove('active', 'neighbor');
+                if (i === currentIndex) btn.classList.add('active');
+                else if (Math.abs(i - currentIndex) === 1) btn.classList.add('neighbor');
+            });
+
+            clearAllMedia();
+            if (currentIndex === 0) {
+                const img0 = document.getElementById('media-img-0');
+                const vdo0 = document.getElementById('media-vdo-0');
+                img0.classList.add('active-media');
+                videoSwitchTimer = setTimeout(() => {
+                    img0.classList.remove('active-media');
+                    vdo0.classList.add('active-media');
+                    vdo0.play().catch(() => {});
+                }, 3000);
+            } else {
+                const targetMedia = document.getElementById('media-' + currentIndex);
+                if (targetMedia) targetMedia.classList.add('active-media');
+            }
+        }
+
+        function sendAHK(cmd) {
+            if (window.ahk && window.ahk.global && window.ahk.global.CNC_Execute) {
+                window.ahk.global.CNC_Execute(cmd);
+            } else if (window.chrome && window.chrome.webview) {
+                window.chrome.webview.postMessage(cmd);
+            } else {
+                console.log("[AHK Executed]:", cmd);
+            }
+        }
+
+        /* === [แก้ไข] เรียกใช้ showCtrlAlert() เพื่อแสดงรูปภาพ ctrlsos.png แทนข้อความ === */
+function handleStart(event) {
+            if (isEditMode) return;
+            if (!event.ctrlKey && !isCtrlPressed) {
+                showCtrlAlert(); 
+                return;
+            }
+            playSound(sndStart); 
+            
+            const cmd = menuItems[currentIndex].getAttribute('data-cmd');
+            sendAHK(cmd);
+
+            // ถ้าเลือกเมนู 3DPROBE ให้เปิดหน้าต่าง piyawat_flow.html แบบ Popup เต็มจอ
+            if (cmd === "CMD_3DPROBE") {
+                const w = window.screen.availWidth;
+                const h = window.screen.availHeight;
+                const popup = window.open(
+                    'piyawat_flow.html',
+                    'PiyawatFlowPopup',
+                    `width=${w},height=${h},left=0,top=0,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`
+                );
+                if (popup) popup.focus();
+            }
+        }
+
+        function handleCameraClick(event) {
+            if (isEditMode) return;
+            if (!event.ctrlKey && !isCtrlPressed) { showCtrlAlert(); return; }
+            playSound(sndStart); sendAHK("CMD_RUN_CAMERA");
+        }
+        function handleParkClick(event) {
+            if (isEditMode) return;
+            if (!event.ctrlKey && !isCtrlPressed) { showCtrlAlert(); return; }
+            playSound(sndStart); sendAHK("CMD_PARK_CNC");
+        }
+        function handleMillWiClick(event) {
+            if (isEditMode) return;
+            if (!event.ctrlKey && !isCtrlPressed) { showCtrlAlert(); return; }
+            playSound(sndStart); sendAHK("CMD_MILLING_WIZARD");
+        }
+
+        /* === [เพิ่มใหม่] ฟังก์ชันแสดง Modal รูปภาพ ctrlsos.png === */
+        function showCtrlAlert() {
+            const modalContent = document.querySelector('#ctrlModal .modal-content');
+            const modalImg = document.getElementById('modalImg');
+            const modalIcon = document.getElementById('modalIcon');
+            const modalMsg = document.getElementById('modalMsg');
+
+            // ซ่อนไอคอนและข้อความเดิม แล้วแสดงรูปภาพ ctrlsos.png
+            modalIcon.style.display = 'none';
+            modalMsg.style.display = 'none';
+            modalImg.src = 'ctrlsos.png';
+            modalImg.style.display = 'block';
+
+            modalContent.classList.add('image-mode');
+            document.getElementById('ctrlModal').classList.add('show');
+        }
+
+        /* === [อัปเดต] ฟังก์ชันแสดง Modal ข้อความปกติ (เช่น ตอนบันทึกการตั้งค่า) === */
+        function showModal(msg, iconClass = "fa-solid fa-triangle-exclamation") {
+            const modalContent = document.querySelector('#ctrlModal .modal-content');
+            const modalImg = document.getElementById('modalImg');
+            const modalIcon = document.getElementById('modalIcon');
+            const modalMsg = document.getElementById('modalMsg');
+
+            // ซ่อนรูปภาพ แล้วกลับมาแสดงไอคอนและข้อความตามปกติ
+            modalImg.style.display = 'none';
+            modalIcon.style.display = 'block';
+            modalMsg.style.display = 'block';
+            modalContent.classList.remove('image-mode');
+
+            modalMsg.innerHTML = msg;
+            modalIcon.className = iconClass;
+            document.getElementById('ctrlModal').classList.add('show');
+        }
+        function closeModal() { document.getElementById('ctrlModal').classList.remove('show'); }
+
+        window.addEventListener('keydown', (e) => {
+            if (isEditMode) return;
+            if (e.key === 'Control') { isCtrlPressed = true; document.body.classList.add('ctrl-down'); }
+            else if (e.key === 'ArrowDown') selectMenu((currentIndex + 1) % menuItems.length);
+            else if (e.key === 'ArrowUp') selectMenu((currentIndex - 1 + menuItems.length) % menuItems.length);
+            else if (e.key === 'Enter') handleStart(e);
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'Control') { isCtrlPressed = false; document.body.classList.remove('ctrl-down'); }
+        });
+        window.addEventListener('wheel', (e) => {
+            if (isEditMode) return;
+            if (e.deltaY > 0) selectMenu((currentIndex + 1) % menuItems.length);
+            else if (e.deltaY < 0) selectMenu((currentIndex - 1 + menuItems.length) % menuItems.length);
+        }, { passive: true });
+    </script>
+</body>
+</html>
